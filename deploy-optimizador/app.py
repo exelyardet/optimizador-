@@ -73,7 +73,7 @@ label, .stTextInput input, .stNumberInput input, .stSelectbox div,
 }
 
 [data-testid="stIconMaterial"] {
-    font-family: 'Material Symbols Outlined' !important;
+    font-family: 'Material Symbols Rounded' !important;
 }
 
 section[data-testid="stSidebar"] {
