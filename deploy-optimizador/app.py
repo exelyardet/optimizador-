@@ -52,6 +52,30 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+html, body, [class*="css"], [class*="st-"] {
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+h1, h2, h3 {
+    font-weight: 700 !important;
+    letter-spacing: -0.01em;
+}
+
+[data-testid="stMetricValue"] {
+    font-weight: 700;
+}
+
+[data-testid="stTabs"] button [data-testid="stMarkdownContainer"] p {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("📈 Optimizador de Carteras")
 st.markdown("*Optimizacion de portfolios usando teoria de Markowitz*")
 st.markdown("---")
@@ -291,7 +315,7 @@ if st.session_state.get('optimization_done', False):
     with tab1:
         st.subheader("Espacio de Portfolios (Markowitz)")
         fig = plot_efficient_frontier(random_ports, frontier, portfolio_list, rf_rate)
-        st.pyplot(fig)
+        st.plotly_chart(fig, width="stretch")
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -325,7 +349,7 @@ if st.session_state.get('optimization_done', False):
         with col1:
             st.markdown("### Portfolio Sharpe Optimo")
             fig = plot_portfolio_weights(port_sharpe.weights, data['assets'], "Sharpe Optimo")
-            st.pyplot(fig)
+            st.plotly_chart(fig, width="stretch")
 
             weights_df = plot_weights_table(port_sharpe.weights, data['assets'])
             st.dataframe(weights_df, width="stretch", hide_index=True)
@@ -333,7 +357,7 @@ if st.session_state.get('optimization_done', False):
         with col2:
             st.markdown("### Portfolio Minima Volatilidad")
             fig = plot_portfolio_weights(port_min_vol.weights, data['assets'], "Min Volatilidad", "#C62828")
-            st.pyplot(fig)
+            st.plotly_chart(fig, width="stretch")
 
             weights_df = plot_weights_table(port_min_vol.weights, data['assets'])
             st.dataframe(weights_df, width="stretch", hide_index=True)
@@ -341,7 +365,7 @@ if st.session_state.get('optimization_done', False):
         if port_target:
             st.markdown(f"### {port_target.name}")
             fig = plot_portfolio_weights(port_target.weights, data['assets'], port_target.name, "#388E3C")
-            st.pyplot(fig)
+            st.plotly_chart(fig, width="stretch")
 
             weights_df = plot_weights_table(port_target.weights, data['assets'])
             st.dataframe(weights_df, width="stretch", hide_index=True)
@@ -365,7 +389,7 @@ if st.session_state.get('optimization_done', False):
         st.subheader("Matriz de Correlacion")
 
         fig, high_corr = plot_correlation_matrix(data['returns'], data['assets'])
-        st.pyplot(fig)
+        st.plotly_chart(fig, width="stretch")
 
         display_high_correlation_warning(high_corr)
 
@@ -373,7 +397,7 @@ if st.session_state.get('optimization_done', False):
         st.subheader("Rendimientos Acumulados")
 
         fig = plot_cumulative_returns(portfolio_returns, benchmark_returns)
-        st.pyplot(fig)
+        st.plotly_chart(fig, width="stretch")
 
         st.subheader("Comparativa CAGR")
 
@@ -388,7 +412,7 @@ if st.session_state.get('optimization_done', False):
         }
 
         fig = plot_cagr_comparison(cagr_data)
-        st.pyplot(fig)
+        st.plotly_chart(fig, width="stretch")
 
     with tab6:
         st.subheader("Metricas de Cola: VaR y CVaR (Expected Shortfall)")

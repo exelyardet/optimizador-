@@ -1,16 +1,20 @@
-"""Chart generation module for portfolio visualization."""
+"""Chart generation module for portfolio visualization (Plotly)."""
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from matplotlib.colors import LinearSegmentedColormap
-from typing import Dict, List, Optional, Tuple
-import streamlit as st
+from typing import Dict, List, Tuple
 
-
-plt.style.use('seaborn-v0_8-whitegrid')
+from .theme import (
+    CATEGORICAL,
+    SEQUENTIAL_BLUE,
+    DIVERGING_COLORSCALE,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+    GRIDLINE,
+    color_for,
+    style_figure,
+)
 
 
 def plot_efficient_frontier(
@@ -18,7 +22,7 @@ def plot_efficient_frontier(
     frontier: Dict,
     portfolios: List[Dict],
     rf: float = 0.02
-) -> plt.Figure:
+) -> go.Figure:
     """
     Plot the efficient frontier with random portfolios and optimal points.
 
@@ -29,46 +33,36 @@ def plot_efficient_frontier(
         rf: Risk-free rate
 
     Returns:
-        Matplotlib figure
+        Plotly figure
     """
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig = go.Figure()
 
-    sc = ax.scatter(
-        random_portfolios['volatility'],
-        random_portfolios['returns'],
-        c=random_portfolios['sharpe'],
-        cmap='viridis',
-        alpha=0.5,
-        s=10,
-        label='Portfolios Aleatorios'
-    )
-    plt.colorbar(sc, ax=ax, label='Sharpe Ratio')
+    fig.add_trace(go.Scattergl(
+        x=random_portfolios['volatility'],
+        y=random_portfolios['returns'],
+        mode='markers',
+        marker=dict(
+            size=6,
+            color=random_portfolios['sharpe'],
+            colorscale=SEQUENTIAL_BLUE,
+            showscale=True,
+            colorbar=dict(title='Sharpe', thickness=14),
+            opacity=0.55,
+            line=dict(width=0)
+        ),
+        name='Portfolios Aleatorios',
+        hovertemplate='Vol: %{x:.2%}<br>Ret: %{y:.2%}<br>Sharpe: %{marker.color:.2f}<extra></extra>'
+    ))
 
     valid_mask = ~np.isnan(frontier['volatility'])
-    ax.plot(
-        frontier['volatility'][valid_mask],
-        frontier['returns'][valid_mask],
-        'b-',
-        linewidth=3,
-        label='Frontera Eficiente'
-    )
-
-    markers = ['*', 'o', 'X', 's', 'D']
-    colors = ['gold', 'red', 'green', 'purple', 'orange']
-    sizes = [300, 150, 150, 150, 150]
-
-    for i, port in enumerate(portfolios):
-        ax.scatter(
-            port['volatility'],
-            port['returns'],
-            marker=markers[i % len(markers)],
-            color=colors[i % len(colors)],
-            s=sizes[i % len(sizes)],
-            label=port['name'],
-            edgecolors='black',
-            linewidth=1,
-            zorder=5
-        )
+    fig.add_trace(go.Scatter(
+        x=frontier['volatility'][valid_mask],
+        y=frontier['returns'][valid_mask],
+        mode='lines',
+        line=dict(color=TEXT_PRIMARY, width=3),
+        name='Frontera Eficiente',
+        hovertemplate='Vol: %{x:.2%}<br>Ret: %{y:.2%}<extra></extra>'
+    ))
 
     if portfolios:
         max_sharpe_port = max(portfolios, key=lambda x: x.get('sharpe', 0))
@@ -76,15 +70,40 @@ def plot_efficient_frontier(
         vol_max = np.nanmax(frontier['volatility']) * 1.2
         vol_cml = np.linspace(0, vol_max, 100)
         cml_line = rf + sharpe * vol_cml
-        ax.plot(vol_cml, cml_line, 'r--', linewidth=2, label='CML')
+        fig.add_trace(go.Scatter(
+            x=vol_cml, y=cml_line, mode='lines',
+            line=dict(color=CATEGORICAL[7], width=2, dash='dash'),
+            name='CML',
+            hoverinfo='skip'
+        ))
 
-    ax.set_title('Espacio de Portfolios (Markowitz)', fontsize=16, weight='bold')
-    ax.set_xlabel('Volatilidad Anual', fontsize=12)
-    ax.set_ylabel('Retorno Anual', fontsize=12)
-    ax.legend(loc='upper left', fontsize=10)
-    ax.grid(True, alpha=0.3)
+    markers = ['star', 'diamond', 'square', 'triangle-up']
+    for i, port in enumerate(portfolios):
+        fig.add_trace(go.Scatter(
+            x=[port['volatility']],
+            y=[port['returns']],
+            mode='markers',
+            marker=dict(
+                symbol=markers[i % len(markers)],
+                size=18,
+                color=CATEGORICAL[(i + 1) % len(CATEGORICAL)],
+                line=dict(color=TEXT_PRIMARY, width=1.5)
+            ),
+            name=port['name'],
+            hovertemplate=f"{port['name']}<br>Vol: %{{x:.2%}}<br>Ret: %{{y:.2%}}<extra></extra>"
+        ))
 
-    plt.tight_layout()
+    style_figure(
+        fig,
+        title_text='Espacio de Portfolios (Markowitz)',
+        xaxis_title='Volatilidad Anual',
+        yaxis_title='Retorno Anual',
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, x=0),
+        height=560
+    )
+    fig.update_xaxes(tickformat='.0%')
+    fig.update_yaxes(tickformat='.0%')
+
     return fig
 
 
@@ -92,8 +111,8 @@ def plot_portfolio_weights(
     weights: np.ndarray,
     assets: List[str],
     title: str,
-    color: str = '#1976D2'
-) -> plt.Figure:
+    color: str = None
+) -> go.Figure:
     """
     Plot horizontal bar chart of portfolio weights.
 
@@ -101,48 +120,55 @@ def plot_portfolio_weights(
         weights: Array of portfolio weights
         assets: List of asset names
         title: Chart title
-        color: Primary color for the chart
+        color: Unused, kept for backwards-compatible call sites (each asset
+            gets its own fixed-order categorical color instead)
 
     Returns:
-        Matplotlib figure
+        Plotly figure
     """
     df = pd.DataFrame({'Activo': assets, 'Peso (%)': np.array(weights) * 100})
     df = df[df['Peso (%)'] > 0.01].sort_values('Peso (%)', ascending=True)
 
+    fig = go.Figure()
+
     if df.empty:
-        fig, ax = plt.subplots(figsize=(10, 4))
-        ax.text(0.5, 0.5, 'No hay activos con peso significativo',
-                ha='center', va='center', fontsize=14)
-        ax.axis('off')
+        fig.add_annotation(
+            text='No hay activos con peso significativo',
+            showarrow=False, font=dict(size=14, color=TEXT_SECONDARY)
+        )
+        style_figure(fig, title_text=title, height=200)
+        fig.update_xaxes(visible=False)
+        fig.update_yaxes(visible=False)
         return fig
 
-    cmap = plt.get_cmap("Set2")
-    colors = [cmap(i) for i in range(len(df))]
+    colors = [color_for(i) for i in range(len(df))]
 
-    fig, ax = plt.subplots(figsize=(10, max(4, len(df) * 0.5)))
+    fig.add_trace(go.Bar(
+        x=df['Peso (%)'],
+        y=df['Activo'],
+        orientation='h',
+        marker=dict(color=colors, line=dict(color=TEXT_PRIMARY, width=0.5)),
+        text=[f'{w:.1f}%' for w in df['Peso (%)']],
+        textposition='outside',
+        hovertemplate='%{y}: %{x:.2f}%<extra></extra>'
+    ))
 
-    bars = ax.barh(df['Activo'], df['Peso (%)'], color=colors, edgecolor='black', height=0.7)
+    style_figure(
+        fig,
+        title_text=title,
+        xaxis_title='Peso (%)',
+        showlegend=False,
+        height=max(280, len(df) * 42)
+    )
+    fig.update_xaxes(range=[0, max(100, df['Peso (%)'].max() + 12)])
 
-    ax.set_xlim(0, max(100, df['Peso (%)'].max() + 10))
-    ax.set_xlabel('Peso (%)', fontsize=12)
-    ax.set_title(title, fontsize=14, weight='bold', pad=15)
-
-    for idx, bar in enumerate(bars):
-        width = bar.get_width()
-        ax.text(width + 1, bar.get_y() + bar.get_height() / 2,
-                f'{width:.1f}%', va='center', fontsize=11, fontweight='bold')
-
-    ax.grid(axis='x', linestyle=':', alpha=0.4)
-    ax.set_ylabel('')
-
-    plt.tight_layout()
     return fig
 
 
 def plot_correlation_matrix(
     returns: pd.DataFrame,
     assets: List[str]
-) -> Tuple[plt.Figure, List[Tuple[str, str, float]]]:
+) -> Tuple[go.Figure, List[Tuple[str, str, float]]]:
     """
     Plot correlation matrix heatmap.
 
@@ -155,32 +181,25 @@ def plot_correlation_matrix(
     """
     corr_matrix = returns[assets].corr()
 
-    cmap_custom = LinearSegmentedColormap.from_list(
-        'CelesteRojoInvert',
-        ['lightblue', 'red'],
-        N=256
+    fig = go.Figure(data=go.Heatmap(
+        z=corr_matrix.values,
+        x=corr_matrix.columns,
+        y=corr_matrix.columns,
+        colorscale=DIVERGING_COLORSCALE,
+        zmin=-1, zmax=1,
+        text=corr_matrix.round(2).values,
+        texttemplate='%{text}',
+        textfont=dict(size=11),
+        colorbar=dict(title='Correlacion', thickness=14),
+        hovertemplate='%{x} - %{y}: %{z:.2f}<extra></extra>'
+    ))
+
+    style_figure(
+        fig,
+        title_text='Matriz de Correlacion entre Activos',
+        height=max(400, len(assets) * 55)
     )
-
-    fig, ax = plt.subplots(figsize=(10, 8))
-
-    sns.heatmap(
-        corr_matrix,
-        annot=True,
-        fmt='.2f',
-        annot_kws={'size': 10},
-        cmap=cmap_custom,
-        vmin=0.0,
-        vmax=1.0,
-        linewidths=0.5,
-        linecolor='gray',
-        square=True,
-        cbar_kws={'shrink': 0.8, 'pad': 0.02, 'label': 'Correlacion'},
-        ax=ax
-    )
-
-    ax.set_title('Matriz de Correlacion entre Activos', fontsize=14, weight='bold')
-    plt.xticks(rotation=45, fontsize=10)
-    plt.yticks(rotation=0, fontsize=10)
+    fig.update_yaxes(autorange='reversed')
 
     high_corr = []
     for i in range(len(corr_matrix.columns)):
@@ -192,14 +211,13 @@ def plot_correlation_matrix(
                     corr_matrix.iloc[i, j]
                 ))
 
-    plt.tight_layout()
     return fig, high_corr
 
 
 def plot_cumulative_returns(
     portfolio_returns: Dict[str, pd.Series],
     benchmark_returns: pd.DataFrame
-) -> plt.Figure:
+) -> go.Figure:
     """
     Plot cumulative returns comparison.
 
@@ -208,33 +226,43 @@ def plot_cumulative_returns(
         benchmark_returns: DataFrame with benchmark returns
 
     Returns:
-        Matplotlib figure
+        Plotly figure
     """
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig = go.Figure()
 
-    colors = ['#1976D2', '#C62828', '#388E3C', '#7B1FA2']
     for i, (name, returns) in enumerate(portfolio_returns.items()):
         cum = (1 + returns).cumprod() - 1
-        ax.plot(cum.index, cum * 100, label=name, linewidth=2,
-                color=colors[i % len(colors)])
+        fig.add_trace(go.Scatter(
+            x=cum.index, y=cum * 100, mode='lines', name=name,
+            line=dict(color=color_for(i), width=2.5),
+            hovertemplate=f'{name}<br>%{{x|%Y-%m-%d}}: %{{y:.1f}}%<extra></extra>'
+        ))
 
-    for col in benchmark_returns.columns:
+    n_ports = len(portfolio_returns)
+    for j, col in enumerate(benchmark_returns.columns):
         cum = (1 + benchmark_returns[col]).cumprod() - 1
-        ax.plot(cum.index, cum * 100, label=col, linestyle='--', linewidth=1.5)
+        fig.add_trace(go.Scatter(
+            x=cum.index, y=cum * 100, mode='lines', name=col,
+            line=dict(color=color_for(n_ports + j), width=1.5, dash='dash'),
+            hovertemplate=f'{col}<br>%{{x|%Y-%m-%d}}: %{{y:.1f}}%<extra></extra>'
+        ))
 
-    ax.set_title('Rendimientos Acumulados: Portfolios vs Benchmarks', fontsize=14, weight='bold')
-    ax.set_xlabel('Fecha', fontsize=12)
-    ax.set_ylabel('Crecimiento Acumulado (%)', fontsize=12)
-    ax.legend(loc='upper left', fontsize=10)
-    ax.grid(True, alpha=0.3)
+    style_figure(
+        fig,
+        title_text='Rendimientos Acumulados: Portfolios vs Benchmarks',
+        xaxis_title='Fecha',
+        yaxis_title='Crecimiento Acumulado (%)',
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, x=0),
+        hovermode='x unified',
+        height=480
+    )
 
-    plt.tight_layout()
     return fig
 
 
 def plot_cagr_comparison(
     cagr_data: Dict[str, Dict[str, float]]
-) -> plt.Figure:
+) -> go.Figure:
     """
     Plot CAGR comparison bar chart.
 
@@ -242,8 +270,14 @@ def plot_cagr_comparison(
         cagr_data: Dict with 'assets', 'portfolios', 'benchmarks' subdicts
 
     Returns:
-        Matplotlib figure
+        Plotly figure
     """
+    tipo_colors = {
+        'Activo': color_for(0),
+        'Portfolio': color_for(1),
+        'Benchmark': color_for(2),
+    }
+
     data = []
     for name, cagr in cagr_data.get('assets', {}).items():
         data.append({'Nombre': name, 'CAGR (%)': cagr * 100, 'Tipo': 'Activo'})
@@ -254,17 +288,26 @@ def plot_cagr_comparison(
 
     df = pd.DataFrame(data)
 
-    fig, ax = plt.subplots(figsize=(12, 6))
-    sns.barplot(data=df, x='Nombre', y='CAGR (%)', hue='Tipo', dodge=False, ax=ax)
+    fig = go.Figure()
+    for tipo, color in tipo_colors.items():
+        sub = df[df['Tipo'] == tipo]
+        if sub.empty:
+            continue
+        fig.add_trace(go.Bar(
+            x=sub['Nombre'], y=sub['CAGR (%)'], name=tipo,
+            marker_color=color,
+            hovertemplate='%{x}: %{y:.1f}%<extra></extra>'
+        ))
 
-    ax.set_title('Comparativa CAGR Anual', fontsize=14, weight='bold')
-    ax.set_ylabel('CAGR Anual (%)', fontsize=12)
-    ax.set_xlabel('')
-    plt.xticks(rotation=45, ha='right')
-    ax.legend(title='Tipo', fontsize=10)
-    ax.grid(axis='y', alpha=0.3)
+    style_figure(
+        fig,
+        title_text='Comparativa CAGR Anual',
+        yaxis_title='CAGR Anual (%)',
+        legend_title_text='Tipo',
+        height=480
+    )
+    fig.update_xaxes(tickangle=-45)
 
-    plt.tight_layout()
     return fig
 
 
@@ -274,7 +317,7 @@ def plot_tail_risk_histogram_plotly(
     cvar_95: Dict[str, float]
 ) -> go.Figure:
     """
-    Plot Plotly histograms of daily returns marking the 95% VaR and CVaR
+    Plot histograms of daily returns marking the 95% VaR and CVaR
     (Expected Shortfall) lines to visualize the extreme-loss zone.
 
     Args:
@@ -291,12 +334,11 @@ def plot_tail_risk_histogram_plotly(
     rows = (n + 1) // 2
 
     fig = make_subplots(rows=rows, cols=cols, subplot_titles=names)
-    colors = ['#1976D2', '#C62828', '#388E3C', '#f0ad4e']
 
     for i, name in enumerate(names):
         row, col = divmod(i, cols)
         row, col = row + 1, col + 1
-        color = colors[i % len(colors)]
+        color = color_for(i)
         data = portfolio_returns[name] * 100
 
         fig.add_trace(go.Histogram(
@@ -317,20 +359,20 @@ def plot_tail_risk_histogram_plotly(
             row=row, col=col
         )
         fig.add_vline(
-            x=-cvar_val, line_dash='dot', line_color='black', line_width=2,
+            x=-cvar_val, line_dash='dot', line_color=TEXT_PRIMARY, line_width=2,
             annotation_text=f'CVaR 95%: {cvar_val:.2f}%', annotation_position='bottom left',
             row=row, col=col
         )
 
-    fig.update_layout(
+    style_figure(
+        fig,
         title_text='Distribucion de Retornos Diarios: Zona de Perdida Extrema (VaR / CVaR 95%)',
-        template='plotly_white',
         height=380 * rows,
         showlegend=False,
-        margin=dict(t=90)
+        margin=dict(t=90, l=16, r=16, b=16)
     )
-    fig.update_xaxes(title_text='Retorno Diario (%)')
-    fig.update_yaxes(title_text='Densidad')
+    fig.update_xaxes(title_text='Retorno Diario (%)', gridcolor=GRIDLINE)
+    fig.update_yaxes(title_text='Densidad', gridcolor=GRIDLINE)
 
     return fig
 
@@ -355,13 +397,14 @@ def plot_monte_carlo_fan_chart(
 
     lower_label = f"{(1 - confidence) * 100:.0f}"
     upper_label = f"{confidence * 100:.0f}"
+    band_color = CATEGORICAL[0]
 
     fig = go.Figure()
 
     for path in mc_result['sample_paths']:
         fig.add_trace(go.Scatter(
             x=days, y=path, mode='lines',
-            line=dict(color='rgba(120,120,120,0.15)', width=1),
+            line=dict(color='rgba(137,135,129,0.18)', width=1),
             showlegend=False, hoverinfo='skip'
         ))
 
@@ -372,7 +415,7 @@ def plot_monte_carlo_fan_chart(
     fig.add_trace(go.Scatter(
         x=days, y=pct['lower'], mode='lines',
         line=dict(width=0), fill='tonexty',
-        fillcolor='rgba(25,118,210,0.15)',
+        fillcolor='rgba(42,120,214,0.15)',
         name=f'Banda P{lower_label}-P{upper_label}'
     ))
 
@@ -383,28 +426,29 @@ def plot_monte_carlo_fan_chart(
     fig.add_trace(go.Scatter(
         x=days, y=pct['p25'], mode='lines',
         line=dict(width=0), fill='tonexty',
-        fillcolor='rgba(25,118,210,0.35)',
+        fillcolor='rgba(42,120,214,0.32)',
         name='Banda P25-P75'
     ))
 
     fig.add_trace(go.Scatter(
         x=days, y=pct['median'], mode='lines',
-        line=dict(color='#0D47A1', width=3),
+        line=dict(color=band_color, width=3),
         name='Mediana (P50)'
     ))
 
     fig.add_hline(
-        y=mc_result['initial_capital'], line_dash='dot', line_color='gray',
+        y=mc_result['initial_capital'], line_dash='dot', line_color=TEXT_SECONDARY,
         annotation_text='Capital Inicial', annotation_position='bottom right'
     )
 
-    fig.update_layout(
+    style_figure(
+        fig,
         title_text='Simulacion Monte Carlo: Proyeccion de Valor de Cartera',
         xaxis_title='Dias de Trading',
         yaxis_title='Valor de Cartera (USD)',
-        template='plotly_white',
         hovermode='x unified',
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, x=0)
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, x=0),
+        height=520
     )
 
     return fig

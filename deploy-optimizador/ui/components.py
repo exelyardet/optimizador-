@@ -1,7 +1,16 @@
 """UI components for Streamlit app."""
 import pandas as pd
 import streamlit as st
+from matplotlib.colors import LinearSegmentedColormap
 from typing import List, Tuple
+
+from .theme import GOOD, CRITICAL
+
+# Two-color ramps built from the app's palette, used for table
+# background-gradient styling (pandas Styler needs a matplotlib colormap).
+_GREEN_CMAP = LinearSegmentedColormap.from_list('good_ramp', ['#eafaea', GOOD])
+_RED_CMAP = LinearSegmentedColormap.from_list('critical_ramp', ['#fdecea', CRITICAL])
+_RED_CMAP_R = LinearSegmentedColormap.from_list('critical_ramp_r', [CRITICAL, '#fdecea'])
 
 
 def display_metrics_table(df: pd.DataFrame) -> None:
@@ -20,13 +29,13 @@ def display_metrics_table(df: pd.DataFrame) -> None:
         'Beta SPY': '{:.2f}',
         'Beta QQQ': '{:.2f}'
     }).background_gradient(
-        subset=['Retorno Anual (%)'], cmap='Greens'
+        subset=['Retorno Anual (%)'], cmap=_GREEN_CMAP
     ).background_gradient(
-        subset=['Volatilidad (%)'], cmap='Reds_r'
+        subset=['Volatilidad (%)'], cmap=_RED_CMAP_R
     ).background_gradient(
-        subset=['Sharpe'], cmap='YlGn'
+        subset=['Sharpe'], cmap=_GREEN_CMAP
     ).background_gradient(
-        subset=['CAGR (%)'], cmap='Greens'
+        subset=['CAGR (%)'], cmap=_GREEN_CMAP
     ).set_properties(**{
         'text-align': 'center',
         'font-size': '14px'
@@ -45,7 +54,7 @@ def display_tail_risk_table(df: pd.DataFrame) -> None:
     """
     cols = ['VaR 95% (%)', 'CVaR 95% (%)', 'VaR 99% (%)', 'CVaR 99% (%)']
     styled = df.style.format({c: '{:.2f}' for c in cols}).background_gradient(
-        subset=cols, cmap='OrRd'
+        subset=cols, cmap=_RED_CMAP
     ).set_properties(**{
         'text-align': 'center',
         'font-size': '14px'
@@ -105,7 +114,7 @@ def display_stress_table(df: pd.DataFrame, title: str = "") -> None:
         st.subheader(title)
 
     styled = df.style.format('{:.2f}%').background_gradient(
-        axis=None, cmap='OrRd', vmin=df.min().min(), vmax=0
+        axis=None, cmap=_RED_CMAP_R, vmin=df.min().min(), vmax=0
     ).set_properties(**{
         'text-align': 'center',
         'font-size': '14px'
