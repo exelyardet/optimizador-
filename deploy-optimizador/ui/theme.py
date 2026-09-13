@@ -1,67 +1,70 @@
 """
-Shared design tokens for a consistent, professional look across the app.
+Shared design tokens for a distinctive, professional dark theme across the app.
 
 Centralizes the color palette, typography, and Plotly layout defaults so
-every chart in ui/charts.py draws from the same visual system instead of
-ad-hoc colors per function.
+every chart in ui/charts.py and every table in ui/components.py draws from
+the same navy dark visual system instead of ad-hoc colors per function.
 """
 import plotly.graph_objects as go
 
-# Fixed-order categorical palette (validated for colorblind-safe adjacent
-# contrast). Never cycle/reassign by rank - always index by identity.
+# Fixed-order categorical palette (dark-surface steps of a validated
+# colorblind-safe set). Never cycle/reassign by rank - always index by identity.
 CATEGORICAL = [
-    '#2a78d6',  # 1 blue      - primary series / "Sharpe Optimo"
-    '#eb6834',  # 2 orange    - "Min Volatilidad"
-    '#1baf7a',  # 3 aqua      - target / third series
-    '#eda100',  # 4 yellow
-    '#e87ba4',  # 5 magenta
-    '#008300',  # 6 green
-    '#4a3aa7',  # 7 violet
-    '#e34948',  # 8 red
+    '#3987e5',  # 1 blue      - primary series / "Sharpe Optimo"
+    '#d9772e',  # 2 orange    - "Min Volatilidad"
+    '#22b884',  # 3 aqua      - target / third series
+    '#e0ab2e',  # 4 yellow
+    '#e08bb0',  # 5 magenta
+    '#3ecf6e',  # 6 green
+    '#9085e9',  # 7 violet
+    '#e66767',  # 8 red
 ]
 
-# Sequential single-hue ramp (blue), light -> dark, for magnitude encodings
-# (e.g. Sharpe ratio color scale).
+# Sequential single-hue ramp (blue), dark -> light, for magnitude encodings
+# on a dark surface: low values recede toward the dark background, high
+# values pop bright (the inverse ordering of a light-surface ramp).
 SEQUENTIAL_BLUE = [
-    '#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b'
+    '#0d366b', '#184f95', '#1c5cab', '#256abf', '#3987e5', '#6da7ec', '#b7d3f6'
 ]
 
 # Diverging pair for signed data (e.g. correlation): red (positive) <->
-# neutral gray (zero) <-> blue (negative).
+# neutral dark gray (zero) <-> blue (negative), tuned for the dark surface.
 DIVERGING_COLORSCALE = [
-    [0.0, '#2a78d6'],
-    [0.5, '#f0efec'],
-    [1.0, '#e34948'],
+    [0.0, '#3987e5'],
+    [0.5, '#31405c'],
+    [1.0, '#e66767'],
 ]
 
-# Chart chrome & ink (light surface)
-SURFACE = '#fcfcfb'
-PAGE = '#f9f9f7'
-TEXT_PRIMARY = '#0b0b0b'
-TEXT_SECONDARY = '#52514e'
-TEXT_MUTED = '#898781'
-GRIDLINE = '#e1e0d9'
-BASELINE = '#c3c2b7'
+# Chart chrome & ink (dark navy surface)
+PAGE = '#0a1120'
+SURFACE = '#101a2e'
+SIDEBAR = '#0d1626'
+TEXT_PRIMARY = '#f5f7fa'
+TEXT_SECONDARY = '#a8b3c7'
+TEXT_MUTED = '#6b7690'
+GRIDLINE = '#22304a'
+BASELINE = '#33445f'
 
-GOOD = '#0ca30c'
-CRITICAL = '#d03b3b'
+GOOD = '#3ecf6e'
+CRITICAL = '#e66767'
 
 FONT_FAMILY = 'Inter, "Segoe UI", system-ui, sans-serif'
+DISPLAY_FONT_FAMILY = '"Space Grotesk", Inter, "Segoe UI", system-ui, sans-serif'
 
 BASE_LAYOUT = dict(
-    template='plotly_white',
+    template='plotly_dark',
     font=dict(family=FONT_FAMILY, color=TEXT_PRIMARY, size=13),
     paper_bgcolor=SURFACE,
     plot_bgcolor=SURFACE,
-    title_font=dict(size=17, family=FONT_FAMILY, color=TEXT_PRIMARY),
-    legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(size=11)),
+    title_font=dict(size=17, family=DISPLAY_FONT_FAMILY, color=TEXT_PRIMARY),
+    legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(size=11, color=TEXT_SECONDARY)),
     margin=dict(t=64, l=16, r=16, b=16),
 )
 
 
 def style_figure(fig: go.Figure, **layout_overrides) -> go.Figure:
     """
-    Apply the shared visual system (font, surfaces, gridlines) to a figure.
+    Apply the shared dark visual system (font, surfaces, gridlines) to a figure.
 
     Args:
         fig: Plotly figure to style in place

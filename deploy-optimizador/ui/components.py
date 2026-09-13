@@ -4,13 +4,17 @@ import streamlit as st
 from matplotlib.colors import LinearSegmentedColormap
 from typing import List, Tuple
 
-from .theme import GOOD, CRITICAL
+from .theme import GOOD, CRITICAL, TEXT_PRIMARY
 
-# Two-color ramps built from the app's palette, used for table
-# background-gradient styling (pandas Styler needs a matplotlib colormap).
-_GREEN_CMAP = LinearSegmentedColormap.from_list('good_ramp', ['#eafaea', GOOD])
-_RED_CMAP = LinearSegmentedColormap.from_list('critical_ramp', ['#fdecea', CRITICAL])
-_RED_CMAP_R = LinearSegmentedColormap.from_list('critical_ramp_r', [CRITICAL, '#fdecea'])
+# Two-color ramps (dark, muted -> saturated status color) built from the
+# app's palette, used for table background-gradient styling against the
+# dark navy surface (pandas Styler needs a matplotlib colormap). Low value
+# = faint/dark (recedes), high value = saturated (stands out).
+_GREEN_CMAP = LinearSegmentedColormap.from_list('good_ramp', ['#15291d', GOOD])
+_RED_CMAP = LinearSegmentedColormap.from_list('critical_ramp', ['#2c1616', CRITICAL])
+_RED_CMAP_R = LinearSegmentedColormap.from_list('critical_ramp_r', [CRITICAL, '#2c1616'])
+
+_TEXT_STYLE = {'text-align': 'center', 'font-size': '14px', 'color': TEXT_PRIMARY}
 
 
 def display_metrics_table(df: pd.DataFrame) -> None:
@@ -31,15 +35,12 @@ def display_metrics_table(df: pd.DataFrame) -> None:
     }).background_gradient(
         subset=['Retorno Anual (%)'], cmap=_GREEN_CMAP
     ).background_gradient(
-        subset=['Volatilidad (%)'], cmap=_RED_CMAP_R
+        subset=['Volatilidad (%)'], cmap=_RED_CMAP
     ).background_gradient(
         subset=['Sharpe'], cmap=_GREEN_CMAP
     ).background_gradient(
         subset=['CAGR (%)'], cmap=_GREEN_CMAP
-    ).set_properties(**{
-        'text-align': 'center',
-        'font-size': '14px'
-    })
+    ).set_properties(**_TEXT_STYLE)
 
     st.dataframe(styled, width="stretch", hide_index=True)
 
@@ -55,10 +56,7 @@ def display_tail_risk_table(df: pd.DataFrame) -> None:
     cols = ['VaR 95% (%)', 'CVaR 95% (%)', 'VaR 99% (%)', 'CVaR 99% (%)']
     styled = df.style.format({c: '{:.2f}' for c in cols}).background_gradient(
         subset=cols, cmap=_RED_CMAP
-    ).set_properties(**{
-        'text-align': 'center',
-        'font-size': '14px'
-    })
+    ).set_properties(**_TEXT_STYLE)
 
     st.dataframe(styled, width="stretch", hide_index=True)
 
@@ -115,10 +113,7 @@ def display_stress_table(df: pd.DataFrame, title: str = "") -> None:
 
     styled = df.style.format('{:.2f}%').background_gradient(
         axis=None, cmap=_RED_CMAP_R, vmin=df.min().min(), vmax=0
-    ).set_properties(**{
-        'text-align': 'center',
-        'font-size': '14px'
-    })
+    ).set_properties(**_TEXT_STYLE)
 
     st.dataframe(styled, width="stretch")
 

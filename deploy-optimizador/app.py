@@ -54,31 +54,107 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 
-html, body, [class*="css"], [class*="st-"] {
-    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+html, body, [data-testid="stAppViewContainer"],
+[data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li,
+label, .stTextInput input, .stNumberInput input, .stSelectbox div,
+[data-testid="stMetricValue"], [data-testid="stMetricLabel"], [data-testid="stMetricDelta"],
+[data-testid="stCaptionContainer"], .stDataFrame {
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif !important;
 }
 
-h1, h2, h3 {
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3 {
+    font-family: 'Space Grotesk', 'Inter', sans-serif !important;
     font-weight: 700 !important;
     letter-spacing: -0.01em;
 }
 
-[data-testid="stMetricValue"] {
-    font-weight: 700;
+[data-testid="stIconMaterial"] {
+    font-family: 'Material Symbols Outlined' !important;
+}
+
+section[data-testid="stSidebar"] {
+    background-color: #0d1626;
+    border-right: 1px solid #22304a;
 }
 
 [data-testid="stTabs"] button [data-testid="stMarkdownContainer"] p {
     font-weight: 600;
     font-size: 0.95rem;
 }
-</style>
-""", unsafe_allow_html=True)
 
-st.title("📈 Optimizador de Carteras")
-st.markdown("*Optimizacion de portfolios usando teoria de Markowitz*")
-st.markdown("---")
+[data-testid="stTabs"] button[aria-selected="true"] {
+    border-bottom: 3px solid #3987e5 !important;
+}
+
+.stButton button[kind="primary"] {
+    background: linear-gradient(135deg, #3987e5, #1c5cab);
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+[data-testid="stMetric"] {
+    background-color: #101a2e;
+    border: 1px solid #22304a;
+    border-radius: 10px;
+    padding: 14px 18px;
+}
+
+.oc-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 6px;
+}
+
+.oc-header-text h1 {
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    font-size: 2.1rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #f5f7fa;
+    margin: 0;
+    line-height: 1.1;
+}
+
+.oc-header-text p {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    color: #a8b3c7;
+    margin: 4px 0 0 0;
+}
+
+.oc-divider {
+    height: 3px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #3987e5, #22b884, #9085e9);
+    margin: 22px 0 28px 0;
+}
+</style>
+
+<div class="oc-header">
+    <svg width="46" height="46" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="44" height="44" rx="12" fill="url(#oc-grad)"/>
+        <path d="M9 29L18 20L24 26L35 13" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="35" cy="13" r="3" fill="white"/>
+        <defs>
+            <linearGradient id="oc-grad" x1="0" y1="0" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#3987e5"/>
+                <stop offset="1" stop-color="#1c5cab"/>
+            </linearGradient>
+        </defs>
+    </svg>
+    <div class="oc-header-text">
+        <h1>Optimizador de Carteras</h1>
+        <p>Markowitz &middot; VaR / CVaR &middot; Simulacion Monte Carlo</p>
+    </div>
+</div>
+<div class="oc-divider"></div>
+""", unsafe_allow_html=True)
 
 
 with st.sidebar:

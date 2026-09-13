@@ -11,6 +11,7 @@ from .theme import (
     DIVERGING_COLORSCALE,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
+    TEXT_MUTED,
     GRIDLINE,
     color_for,
     style_figure,
@@ -189,7 +190,7 @@ def plot_correlation_matrix(
         zmin=-1, zmax=1,
         text=corr_matrix.round(2).values,
         texttemplate='%{text}',
-        textfont=dict(size=11),
+        textfont=dict(size=11, color=TEXT_PRIMARY),
         colorbar=dict(title='Correlacion', thickness=14),
         hovertemplate='%{x} - %{y}: %{z:.2f}<extra></extra>'
     ))
@@ -359,7 +360,7 @@ def plot_tail_risk_histogram_plotly(
             row=row, col=col
         )
         fig.add_vline(
-            x=-cvar_val, line_dash='dot', line_color=TEXT_PRIMARY, line_width=2,
+            x=-cvar_val, line_dash='dot', line_color=TEXT_MUTED, line_width=2,
             annotation_text=f'CVaR 95%: {cvar_val:.2f}%', annotation_position='bottom left',
             row=row, col=col
         )
@@ -404,7 +405,7 @@ def plot_monte_carlo_fan_chart(
     for path in mc_result['sample_paths']:
         fig.add_trace(go.Scatter(
             x=days, y=path, mode='lines',
-            line=dict(color='rgba(137,135,129,0.18)', width=1),
+            line=dict(color='rgba(168,179,199,0.15)', width=1),
             showlegend=False, hoverinfo='skip'
         ))
 
@@ -415,7 +416,7 @@ def plot_monte_carlo_fan_chart(
     fig.add_trace(go.Scatter(
         x=days, y=pct['lower'], mode='lines',
         line=dict(width=0), fill='tonexty',
-        fillcolor='rgba(42,120,214,0.15)',
+        fillcolor='rgba(57,135,229,0.18)',
         name=f'Banda P{lower_label}-P{upper_label}'
     ))
 
@@ -426,7 +427,7 @@ def plot_monte_carlo_fan_chart(
     fig.add_trace(go.Scatter(
         x=days, y=pct['p25'], mode='lines',
         line=dict(width=0), fill='tonexty',
-        fillcolor='rgba(42,120,214,0.32)',
+        fillcolor='rgba(57,135,229,0.38)',
         name='Banda P25-P75'
     ))
 
