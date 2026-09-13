@@ -5,6 +5,12 @@ from .charts import (
     plot_correlation_matrix,
     plot_cumulative_returns,
     plot_cagr_comparison,
-    plot_var_histograms
+    plot_tail_risk_histogram_plotly,
+    plot_monte_carlo_fan_chart
 )
-from .components import display_metrics_table, display_var_table, display_stress_table
+from .components import (
+    display_metrics_table,
+    display_tail_risk_table,
+    display_monte_carlo_kpis,
+    display_stress_table
+)

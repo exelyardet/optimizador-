@@ -92,6 +92,78 @@ def calculate_var(
     return var_nd
 
 
+def calculate_var_historical(
+    returns: pd.Series,
+    confidence: float = 0.95,
+    days: int = 1
+) -> float:
+    """
+    Calculate Value at Risk using the historical (empirical) method.
+
+    Args:
+        returns: Daily returns series
+        confidence: Confidence level (default 95%)
+        days: Holding period in days
+
+    Returns:
+        VaR as a positive percentage
+    """
+    var_1d = -np.percentile(returns, (1 - confidence) * 100)
+    return var_1d * np.sqrt(days)
+
+
+def calculate_cvar_parametric(
+    returns: pd.Series,
+    confidence: float = 0.95,
+    days: int = 1
+) -> float:
+    """
+    Calculate CVaR (Expected Shortfall) assuming a normal distribution.
+
+    Uses the closed-form expression for the expected value of a normal
+    variable conditional on being below its VaR quantile:
+    ES = -mean + std * phi(z) / (1 - confidence), with z = ppf(1 - confidence).
+
+    Args:
+        returns: Daily returns series
+        confidence: Confidence level (default 95%)
+        days: Holding period in days
+
+    Returns:
+        CVaR as a positive percentage
+    """
+    mean = returns.mean()
+    std = returns.std()
+    z = norm.ppf(1 - confidence)
+    es_1d = -mean + std * norm.pdf(z) / (1 - confidence)
+    return es_1d * np.sqrt(days)
+
+
+def calculate_cvar_historical(
+    returns: pd.Series,
+    confidence: float = 0.95,
+    days: int = 1
+) -> float:
+    """
+    Calculate CVaR (Expected Shortfall) using the historical (empirical) method.
+
+    CVaR is the average of the returns that fall at or below the historical
+    VaR threshold: E[R | R <= -VaR_alpha].
+
+    Args:
+        returns: Daily returns series
+        confidence: Confidence level (default 95%)
+        days: Holding period in days
+
+    Returns:
+        CVaR as a positive percentage
+    """
+    threshold = np.percentile(returns, (1 - confidence) * 100)
+    tail = returns[returns <= threshold]
+    es_1d = -tail.mean() if len(tail) > 0 else -threshold
+    return es_1d * np.sqrt(days)
+
+
 def calculate_cagr(cumulative_returns: pd.Series) -> float:
     """
     Calculate Compound Annual Growth Rate.
@@ -179,39 +251,40 @@ def build_metrics_table(
     return pd.DataFrame(rows)
 
 
-def build_var_table(
+def build_tail_risk_table(
     portfolio_returns: Dict[str, pd.Series],
     spy_returns: pd.Series,
-    confidence: float = 0.95
+    method: str = 'parametric'
 ) -> pd.DataFrame:
     """
-    Build Value at Risk table.
+    Build a comparative tail-risk table with VaR and CVaR (Expected Shortfall)
+    at 95% and 99% confidence, for both portfolios and the SPY benchmark.
 
     Args:
         portfolio_returns: Dict mapping portfolio names to returns series
         spy_returns: SPY benchmark returns
-        confidence: Confidence level
+        method: 'parametric' (normal distribution) or 'historical' (empirical)
 
     Returns:
-        DataFrame with VaR metrics
+        DataFrame with columns: Portfolio, VaR 95% (%), CVaR 95% (%),
+        VaR 99% (%), CVaR 99% (%)
     """
-    rows = []
+    if method == 'historical':
+        var_fn, cvar_fn = calculate_var_historical, calculate_cvar_historical
+    else:
+        var_fn, cvar_fn = calculate_var, calculate_cvar_parametric
 
-    for name, returns in portfolio_returns.items():
-        var_1d = calculate_var(returns, confidence, 1) * 100
-        var_10d = calculate_var(returns, confidence, 10) * 100
+    series_map = dict(portfolio_returns)
+    series_map['SPY'] = spy_returns
+
+    rows = []
+    for name, returns in series_map.items():
         rows.append({
             'Portfolio': name,
-            'VaR 1 dia (%)': var_1d,
-            'VaR 10 dias (%)': var_10d
+            'VaR 95% (%)': var_fn(returns, 0.95, 1) * 100,
+            'CVaR 95% (%)': cvar_fn(returns, 0.95, 1) * 100,
+            'VaR 99% (%)': var_fn(returns, 0.99, 1) * 100,
+            'CVaR 99% (%)': cvar_fn(returns, 0.99, 1) * 100,
         })
-
-    var_spy_1d = calculate_var(spy_returns, confidence, 1) * 100
-    var_spy_10d = calculate_var(spy_returns, confidence, 10) * 100
-    rows.append({
-        'Portfolio': 'SPY',
-        'VaR 1 dia (%)': var_spy_1d,
-        'VaR 10 dias (%)': var_spy_10d
-    })
 
     return pd.DataFrame(rows)

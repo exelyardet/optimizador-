@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from matplotlib.colors import LinearSegmentedColormap
 from typing import Dict, List, Optional, Tuple
 import streamlit as st
@@ -266,56 +268,145 @@ def plot_cagr_comparison(
     return fig
 
 
-def plot_var_histograms(
+def plot_tail_risk_histogram_plotly(
     portfolio_returns: Dict[str, pd.Series],
-    var_1d: Dict[str, float]
-) -> plt.Figure:
+    var_95: Dict[str, float],
+    cvar_95: Dict[str, float]
+) -> go.Figure:
     """
-    Plot histograms of returns with VaR lines.
+    Plot Plotly histograms of daily returns marking the 95% VaR and CVaR
+    (Expected Shortfall) lines to visualize the extreme-loss zone.
 
     Args:
-        portfolio_returns: Dict mapping names to returns series
-        var_1d: Dict mapping names to 1-day VaR percentages
+        portfolio_returns: Dict mapping names to daily returns series
+        var_95: Dict mapping names to 95% VaR (positive percentage)
+        cvar_95: Dict mapping names to 95% CVaR (positive percentage)
 
     Returns:
-        Matplotlib figure
+        Plotly figure with one subplot per series
     """
-    n_plots = len(portfolio_returns)
+    names = list(portfolio_returns.keys())
+    n = len(names)
     cols = 2
-    rows = (n_plots + 1) // 2
+    rows = (n + 1) // 2
 
-    fig, axes = plt.subplots(rows, cols, figsize=(14, 5 * rows))
-    axes = axes.flatten() if n_plots > 1 else [axes]
-
+    fig = make_subplots(rows=rows, cols=cols, subplot_titles=names)
     colors = ['#1976D2', '#C62828', '#388E3C', '#f0ad4e']
 
-    for i, (name, returns) in enumerate(portfolio_returns.items()):
-        if i >= len(axes):
-            break
+    for i, name in enumerate(names):
+        row, col = divmod(i, cols)
+        row, col = row + 1, col + 1
+        color = colors[i % len(colors)]
+        data = portfolio_returns[name] * 100
 
-        ax = axes[i]
-        data = returns * 100
+        fig.add_trace(go.Histogram(
+            x=data,
+            nbinsx=60,
+            marker_color=color,
+            opacity=0.55,
+            histnorm='probability density',
+            showlegend=False
+        ), row=row, col=col)
 
-        sns.histplot(data, bins=60, color=colors[i % len(colors)],
-                     kde=True, stat='density', alpha=0.35, ax=ax)
+        var_val = var_95.get(name, 0)
+        cvar_val = cvar_95.get(name, 0)
 
-        var_val = var_1d.get(name, 0)
-        ax.axvline(-var_val, color=colors[i % len(colors)],
-                   linestyle='--', linewidth=2)
-        ax.text(-var_val, ax.get_ylim()[1] * 0.80,
-                f'VaR\n{var_val:.2f}%',
-                color=colors[i % len(colors)],
-                fontsize=10, ha='right', va='top', fontweight='bold')
+        fig.add_vline(
+            x=-var_val, line_dash='dash', line_color=color, line_width=2,
+            annotation_text=f'VaR 95%: {var_val:.2f}%', annotation_position='top left',
+            row=row, col=col
+        )
+        fig.add_vline(
+            x=-cvar_val, line_dash='dot', line_color='black', line_width=2,
+            annotation_text=f'CVaR 95%: {cvar_val:.2f}%', annotation_position='bottom left',
+            row=row, col=col
+        )
 
-        ax.set_title(f'Retornos Diarios & VaR: {name}', fontsize=12, fontweight='bold')
-        ax.set_xlabel('Retorno Diario (%)')
-        ax.set_ylabel('Densidad')
-        ax.grid(alpha=0.25)
+    fig.update_layout(
+        title_text='Distribucion de Retornos Diarios: Zona de Perdida Extrema (VaR / CVaR 95%)',
+        template='plotly_white',
+        height=380 * rows,
+        showlegend=False,
+        margin=dict(t=90)
+    )
+    fig.update_xaxes(title_text='Retorno Diario (%)')
+    fig.update_yaxes(title_text='Densidad')
 
-    for j in range(i + 1, len(axes)):
-        axes[j].axis('off')
+    return fig
 
-    plt.tight_layout()
+
+def plot_monte_carlo_fan_chart(
+    mc_result: Dict,
+    confidence: float = 0.95
+) -> go.Figure:
+    """
+    Plot a Monte Carlo fan chart: median trajectory, confidence bands
+    (P5-P95 and P25-P75 by default) and a sample of individual paths.
+
+    Args:
+        mc_result: Result dict from core.monte_carlo.simulate_gbm_portfolio
+        confidence: Confidence level used for the outer band labels
+
+    Returns:
+        Plotly figure
+    """
+    pct = mc_result['percentiles']
+    days = np.arange(len(pct['median']))
+
+    lower_label = f"{(1 - confidence) * 100:.0f}"
+    upper_label = f"{confidence * 100:.0f}"
+
+    fig = go.Figure()
+
+    for path in mc_result['sample_paths']:
+        fig.add_trace(go.Scatter(
+            x=days, y=path, mode='lines',
+            line=dict(color='rgba(120,120,120,0.15)', width=1),
+            showlegend=False, hoverinfo='skip'
+        ))
+
+    fig.add_trace(go.Scatter(
+        x=days, y=pct['upper'], mode='lines',
+        line=dict(width=0), showlegend=False, hoverinfo='skip'
+    ))
+    fig.add_trace(go.Scatter(
+        x=days, y=pct['lower'], mode='lines',
+        line=dict(width=0), fill='tonexty',
+        fillcolor='rgba(25,118,210,0.15)',
+        name=f'Banda P{lower_label}-P{upper_label}'
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=days, y=pct['p75'], mode='lines',
+        line=dict(width=0), showlegend=False, hoverinfo='skip'
+    ))
+    fig.add_trace(go.Scatter(
+        x=days, y=pct['p25'], mode='lines',
+        line=dict(width=0), fill='tonexty',
+        fillcolor='rgba(25,118,210,0.35)',
+        name='Banda P25-P75'
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=days, y=pct['median'], mode='lines',
+        line=dict(color='#0D47A1', width=3),
+        name='Mediana (P50)'
+    ))
+
+    fig.add_hline(
+        y=mc_result['initial_capital'], line_dash='dot', line_color='gray',
+        annotation_text='Capital Inicial', annotation_position='bottom right'
+    )
+
+    fig.update_layout(
+        title_text='Simulacion Monte Carlo: Proyeccion de Valor de Cartera',
+        xaxis_title='Dias de Trading',
+        yaxis_title='Valor de Cartera (USD)',
+        template='plotly_white',
+        hovermode='x unified',
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, x=0)
+    )
+
     return fig
 
 

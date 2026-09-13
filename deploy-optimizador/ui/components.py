@@ -35,24 +35,62 @@ def display_metrics_table(df: pd.DataFrame) -> None:
     st.dataframe(styled, width="stretch", hide_index=True)
 
 
-def display_var_table(df: pd.DataFrame) -> None:
+def display_tail_risk_table(df: pd.DataFrame) -> None:
     """
-    Display Value at Risk table.
+    Display the comparative VaR/CVaR tail-risk table.
 
     Args:
-        df: DataFrame with VaR metrics
+        df: DataFrame with columns Portfolio, VaR 95% (%), CVaR 95% (%),
+            VaR 99% (%), CVaR 99% (%)
     """
-    styled = df.style.format({
-        'VaR 1 dia (%)': '{:.2f}',
-        'VaR 10 dias (%)': '{:.2f}'
-    }).background_gradient(
-        subset=['VaR 1 dia (%)', 'VaR 10 dias (%)'], cmap='OrRd'
+    cols = ['VaR 95% (%)', 'CVaR 95% (%)', 'VaR 99% (%)', 'CVaR 99% (%)']
+    styled = df.style.format({c: '{:.2f}' for c in cols}).background_gradient(
+        subset=cols, cmap='OrRd'
     ).set_properties(**{
         'text-align': 'center',
         'font-size': '14px'
     })
 
     st.dataframe(styled, width="stretch", hide_index=True)
+
+
+def display_monte_carlo_kpis(mc_result: dict) -> None:
+    """
+    Display terminal Monte Carlo KPIs in a row of metrics.
+
+    Args:
+        mc_result: Result dict from core.monte_carlo.simulate_gbm_portfolio
+    """
+    initial_capital = mc_result['initial_capital']
+    median_terminal = mc_result['median_terminal']
+    var_mc = mc_result['var_mc']
+    cvar_mc = mc_result['cvar_mc']
+    prob_loss = mc_result['prob_loss']
+    median_dd = mc_result['median_max_drawdown']
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.metric(
+            "Valor Mediano Esperado",
+            f"${median_terminal:,.0f}",
+            f"{(median_terminal / initial_capital - 1) * 100:+.1f}%"
+        )
+    with col2:
+        st.metric(
+            "Peor Escenario (VaR MC)",
+            f"${var_mc:,.0f}",
+            f"{(var_mc / initial_capital - 1) * 100:+.1f}%"
+        )
+    with col3:
+        st.metric(
+            "CVaR Monte Carlo",
+            f"${cvar_mc:,.0f}",
+            f"{(cvar_mc / initial_capital - 1) * 100:+.1f}%"
+        )
+    with col4:
+        st.metric("Probabilidad de Perdida", f"{prob_loss * 100:.1f}%")
+    with col5:
+        st.metric("Max Drawdown Mediano", f"{median_dd * 100:.1f}%")
 
 
 def display_stress_table(df: pd.DataFrame, title: str = "") -> None:
@@ -132,11 +170,15 @@ def display_portfolio_summary(
 
 
 def display_var_interpretation() -> None:
-    """Display interpretation help for VaR charts."""
+    """Display interpretation help for VaR/CVaR charts."""
     st.info("""
     **Como interpretar cada grafico:**
     - Cada histograma muestra la frecuencia de retornos diarios del portfolio.
-    - La linea discontinua marca el **Value at Risk (VaR)** al 95%.
-    - Hay solo un 5% de chances de que la perdida diaria sea peor que ese valor.
-    - Ejemplo: si el VaR es 2.5%, con 95% de confianza NO se espera perder mas de 2.5% en un solo dia.
+    - La linea discontinua marca el **Value at Risk (VaR)** al 95%: solo hay un 5% de
+      chances de que la perdida diaria sea peor que ese valor.
+    - La linea punteada marca el **CVaR / Expected Shortfall**: la perdida promedio
+      esperada quedando dentro de ese 5% peor de los escenarios (siempre >= VaR).
+    - Ejemplo: si el VaR es 2.5% y el CVaR es 3.4%, con 95% de confianza no se espera
+      perder mas de 2.5% en un dia, pero si ese limite se supera, la perdida promedio
+      en esos casos extremos ronda el 3.4%.
     """)
