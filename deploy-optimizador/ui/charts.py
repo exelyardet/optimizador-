@@ -55,16 +55,6 @@ def plot_efficient_frontier(
         hovertemplate='Vol: %{x:.2%}<br>Ret: %{y:.2%}<br>Sharpe: %{marker.color:.2f}<extra></extra>'
     ))
 
-    valid_mask = ~np.isnan(frontier['volatility'])
-    fig.add_trace(go.Scatter(
-        x=frontier['volatility'][valid_mask],
-        y=frontier['returns'][valid_mask],
-        mode='lines',
-        line=dict(color=TEXT_PRIMARY, width=3),
-        name='Frontera Eficiente',
-        hovertemplate='Vol: %{x:.2%}<br>Ret: %{y:.2%}<extra></extra>'
-    ))
-
     if portfolios:
         max_sharpe_port = max(portfolios, key=lambda x: x.get('sharpe', 0))
         sharpe = max_sharpe_port.get('sharpe', 0)
@@ -73,26 +63,56 @@ def plot_efficient_frontier(
         cml_line = rf + sharpe * vol_cml
         fig.add_trace(go.Scatter(
             x=vol_cml, y=cml_line, mode='lines',
-            line=dict(color=CATEGORICAL[7], width=2, dash='dash'),
+            line=dict(color=CATEGORICAL[7], width=1.5, dash='dash'),
+            opacity=0.7,
             name='CML',
             hoverinfo='skip'
         ))
 
+    valid_mask = ~np.isnan(frontier['volatility'])
+    fig.add_trace(go.Scatter(
+        x=frontier['volatility'][valid_mask],
+        y=frontier['returns'][valid_mask],
+        mode='lines',
+        line=dict(color=TEXT_SECONDARY, width=2),
+        name='Frontera Eficiente',
+        hovertemplate='Vol: %{x:.2%}<br>Ret: %{y:.2%}<extra></extra>'
+    ))
+
+    # Label offsets (pixels) fan the callouts out around the cluster of
+    # optimal points, which often sit very close together on the frontier.
+    label_offsets = [(-70, -55), (-70, 55), (90, -55), (90, 55)]
     markers = ['star', 'diamond', 'square', 'triangle-up']
     for i, port in enumerate(portfolios):
+        marker_color = CATEGORICAL[(i + 1) % len(CATEGORICAL)]
         fig.add_trace(go.Scatter(
             x=[port['volatility']],
             y=[port['returns']],
             mode='markers',
             marker=dict(
                 symbol=markers[i % len(markers)],
-                size=18,
-                color=CATEGORICAL[(i + 1) % len(CATEGORICAL)],
+                size=14,
+                color=marker_color,
                 line=dict(color=TEXT_PRIMARY, width=1.5)
             ),
             name=port['name'],
             hovertemplate=f"{port['name']}<br>Vol: %{{x:.2%}}<br>Ret: %{{y:.2%}}<extra></extra>"
         ))
+
+        ax, ay = label_offsets[i % len(label_offsets)]
+        fig.add_annotation(
+            x=port['volatility'], y=port['returns'],
+            text=port['name'],
+            showarrow=True,
+            arrowhead=2, arrowsize=1, arrowwidth=1.2,
+            arrowcolor=marker_color,
+            ax=ax, ay=ay,
+            font=dict(size=12, color=TEXT_PRIMARY),
+            bgcolor='rgba(16,26,46,0.9)',
+            bordercolor=marker_color,
+            borderwidth=1,
+            borderpad=4
+        )
 
     style_figure(
         fig,
@@ -100,7 +120,7 @@ def plot_efficient_frontier(
         xaxis_title='Volatilidad Anual',
         yaxis_title='Retorno Anual',
         legend=dict(orientation='h', yanchor='bottom', y=1.02, x=0),
-        height=560
+        height=580
     )
     fig.update_xaxes(tickformat='.0%')
     fig.update_yaxes(tickformat='.0%')
