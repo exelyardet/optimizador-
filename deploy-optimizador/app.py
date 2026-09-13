@@ -13,7 +13,7 @@ from core.data_loader import prepare_data
 from core.optimizer import PortfolioOptimizer
 from core.metrics import (
     build_metrics_table,
-    build_var_table,
+    build_tail_risk_table,
     get_portfolio_returns,
     calculate_cagr
 )
@@ -23,18 +23,21 @@ from core.stress_test import (
     run_historical_stress_test,
     get_stress_interpretation
 )
+from core.monte_carlo import simulate_gbm_portfolio
 from ui.charts import (
     plot_efficient_frontier,
     plot_portfolio_weights,
     plot_correlation_matrix,
     plot_cumulative_returns,
     plot_cagr_comparison,
-    plot_var_histograms,
+    plot_tail_risk_histogram_plotly,
+    plot_monte_carlo_fan_chart,
     plot_weights_table
 )
 from ui.components import (
     display_metrics_table,
-    display_var_table,
+    display_tail_risk_table,
+    display_monte_carlo_kpis,
     display_stress_table,
     display_high_correlation_warning,
     display_portfolio_summary,
@@ -131,6 +134,43 @@ with st.sidebar:
                 key=f"min_weight_{t}",
                 help=f"Peso minimo que debe tener {t} (0 = sin minimo)"
             ) / 100
+
+    st.markdown("---")
+    st.subheader("Simulacion Monte Carlo")
+    with st.expander("🎲 Parametros Monte Carlo", expanded=False):
+        mc_n_sims = st.slider(
+            "Numero de simulaciones",
+            min_value=1000,
+            max_value=10000,
+            value=2500,
+            step=500,
+            help="Cantidad de trayectorias aleatorias a simular"
+        )
+
+        mc_n_days = st.slider(
+            "Horizonte de proyeccion (dias de trading)",
+            min_value=30,
+            max_value=756,
+            value=252,
+            help="252 dias = 1 anio, 756 dias = 3 anios de trading"
+        )
+
+        mc_initial_capital = st.number_input(
+            "Capital inicial (USD)",
+            min_value=100.0,
+            value=10000.0,
+            step=500.0
+        )
+
+        mc_confidence_pct = st.slider(
+            "Nivel de confianza Fan Chart (%)",
+            min_value=80,
+            max_value=99,
+            value=95,
+            step=1,
+            help="Define la banda externa del grafico (ej: 95% -> P5 a P95)"
+        )
+        mc_confidence = mc_confidence_pct / 100
 
     st.markdown("---")
     optimize_button = st.button("🚀 Optimizar Cartera", type="primary", width="stretch")
@@ -237,14 +277,15 @@ if st.session_state.get('optimization_done', False):
     benchmark_returns = st.session_state['benchmark_returns']
     rf_rate = st.session_state['rf_rate']
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "📊 Frontera Eficiente",
         "⚖️ Composicion",
         "📈 Metricas",
         "🔗 Correlacion",
         "📉 Rendimiento",
         "⚠️ Riesgo (VaR)",
-        "🔥 Stress Test"
+        "🔥 Stress Test",
+        "🎲 Monte Carlo"
     ])
 
     with tab1:
@@ -350,27 +391,34 @@ if st.session_state.get('optimization_done', False):
         st.pyplot(fig)
 
     with tab6:
-        st.subheader("Value at Risk (VaR) - 95% Confianza")
+        st.subheader("Metricas de Cola: VaR y CVaR (Expected Shortfall)")
 
-        var_df = build_var_table(
-            portfolio_returns,
-            benchmark_returns['SPY'] if 'SPY' in benchmark_returns else benchmark_returns.iloc[:, 0]
+        spy_series = benchmark_returns['SPY'] if 'SPY' in benchmark_returns else benchmark_returns.iloc[:, 0]
+
+        st.markdown("#### Metodo Parametrico (Distribucion Normal)")
+        tail_param_df = build_tail_risk_table(portfolio_returns, spy_series, method='parametric')
+        display_tail_risk_table(tail_param_df)
+
+        st.markdown("#### Metodo Historico (Empirico)")
+        tail_hist_df = build_tail_risk_table(portfolio_returns, spy_series, method='historical')
+        display_tail_risk_table(tail_hist_df)
+
+        st.caption(
+            "CVaR (Expected Shortfall) = perdida promedio esperada en el peor "
+            "5% (o 1%) de los escenarios, es decir E[R | R <= -VaR]."
         )
-        display_var_table(var_df)
 
         st.markdown("---")
-        st.subheader("Distribucion de Retornos Diarios")
+        st.subheader("Distribucion de Retornos Diarios: Zona de Perdida Extrema")
 
-        var_1d = {name: float(var_df[var_df['Portfolio'] == name]['VaR 1 dia (%)'].values[0])
-                  for name in portfolio_returns.keys()}
-        var_1d['SPY'] = float(var_df[var_df['Portfolio'] == 'SPY']['VaR 1 dia (%)'].values[0])
+        returns_with_spy = portfolio_returns.copy()
+        returns_with_spy['SPY'] = spy_series
 
-        port_returns_with_spy = portfolio_returns.copy()
-        port_returns_with_spy['SPY'] = benchmark_returns['SPY'] if 'SPY' in benchmark_returns.columns else None
+        var_95_map = dict(zip(tail_hist_df['Portfolio'], tail_hist_df['VaR 95% (%)']))
+        cvar_95_map = dict(zip(tail_hist_df['Portfolio'], tail_hist_df['CVaR 95% (%)']))
 
-        if port_returns_with_spy.get('SPY') is not None:
-            fig = plot_var_histograms(port_returns_with_spy, var_1d)
-            st.pyplot(fig)
+        fig = plot_tail_risk_histogram_plotly(returns_with_spy, var_95_map, cvar_95_map)
+        st.plotly_chart(fig, width="stretch")
 
         display_var_interpretation()
 
@@ -393,6 +441,49 @@ if st.session_state.get('optimization_done', False):
 
         st.info(get_stress_interpretation())
 
+    with tab8:
+        st.subheader("Simulacion de Monte Carlo (GBM Multi-Activo Correlacionado)")
+
+        portfolio_options = {
+            'Sharpe Optimo': port_sharpe,
+            'Min Volatilidad': port_min_vol
+        }
+        if port_target:
+            portfolio_options[port_target.name] = port_target
+
+        selected_port_name = st.selectbox(
+            "Cartera a simular",
+            options=list(portfolio_options.keys()),
+            help="Se simula usando los pesos optimos de la cartera elegida"
+        )
+        selected_port = portfolio_options[selected_port_name]
+
+        with st.spinner("Simulando trayectorias Monte Carlo..."):
+            mc_result = simulate_gbm_portfolio(
+                mean_returns=data['mean_returns'],
+                cov_matrix=data['cov_matrix'],
+                weights=selected_port.weights,
+                n_sims=mc_n_sims,
+                n_days=mc_n_days,
+                initial_capital=mc_initial_capital,
+                confidence=mc_confidence
+            )
+
+        fig = plot_monte_carlo_fan_chart(mc_result, mc_confidence)
+        st.plotly_chart(fig, width="stretch")
+
+        st.markdown("### Metricas Terminales")
+        display_monte_carlo_kpis(mc_result)
+
+        st.info(f"""
+        **Interpretacion:** Se simularon **{mc_n_sims:,}** trayectorias de **{mc_n_days}**
+        dias de trading para la cartera **{selected_port_name}**, usando Movimiento
+        Browniano Geometrico correlacionado (descomposicion de Cholesky sobre la matriz
+        de covarianza anualizada de {', '.join(data['assets'])}). Con un
+        **{mc_confidence_pct}% de confianza**, el valor final de la cartera se ubicara
+        dentro de la banda mostrada en el grafico (P{100 - mc_confidence_pct} a P{mc_confidence_pct}).
+        """)
+
 else:
     st.info("👈 Configure los parametros en el panel lateral y presione **Optimizar Cartera** para comenzar.")
 
@@ -411,8 +502,9 @@ else:
     - **Composicion Optima**: Pesos recomendados para cada portfolio
     - **Metricas Comparativas**: Sharpe, CAGR, Beta vs benchmarks
     - **Analisis de Correlacion**: Diversificacion de la cartera
-    - **Value at Risk**: Estimacion de perdidas potenciales
+    - **VaR y CVaR**: Estimacion de perdidas potenciales y de cola (Expected Shortfall)
     - **Stress Testing**: Comportamiento ante crisis
+    - **Monte Carlo**: Proyeccion probabilistica del valor futuro de la cartera
     """)
 
 
